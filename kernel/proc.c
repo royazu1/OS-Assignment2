@@ -6,6 +6,10 @@
 #include "proc.h"
 #include "defs.h"
 
+//ADDED
+
+//ADDED
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -25,6 +29,13 @@ extern char trampoline[]; // trampoline.S
 // memory model when using p->parent.
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
+
+
+//ADDED ASS2 TASK1
+struct channel channels[CHANNELS_NUM];
+//ADDED ASS2 TASK1
+
+
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
@@ -56,6 +67,22 @@ procinit(void)
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
   }
+
+  //ADDED ASS2 TASK1                --- initialization of the global channel table. note that read_chan and write_chan are used for their address to sleep on, so their integer value doesen't matter at all
+  int i=0;
+  for (struct channel * curr_chan = channels; i < CHANNELS_NUM;curr_chan++) {
+      initlock(&curr_chan->chan_lock, "Channel");
+      curr_chan->chan_state= UNUSED_CHAN;
+      curr_chan->cd=i;
+      curr_chan->data=0;
+      curr_chan->read_chan=0;
+      curr_chan->write_chan=0;
+      curr_chan->parent_proc=0; //null_ptr
+      i++;
+      
+  }
+  printf("channels buffer init done");
+   //ADDED ASS2 TASK1
 }
 
 // Must be called with interrupts disabled,
@@ -124,6 +151,11 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+
+
+   //ADDED ASS2-TASK1
+  p->proc_channel=-1; //proc_channel is an index into the array. when process is killed or exiting we should delete it. (change it's status to unused)
+  //ADDED ASS2-TASK1
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -377,7 +409,12 @@ exit(int status)
 
   p->xstate = status;
   p->state = ZOMBIE;
-
+  //ADDED ASS2 TASK1
+  if (p->proc_channel != -1) { //IF CHANNEL WAS DELETED BY SOME OTHER PROCESS. NO NEED TO CALL DESTROY_CHANNEL
+    printf("Calling chan_destroy from exit\n");
+    channel_destroy(p->proc_channel,CALLED_FROM_KERNEL);
+  }
+  //ADDED ASS2 TASK1
   release(&wait_lock);
 
   // Jump into the scheduler, never to return.
@@ -595,6 +632,13 @@ kill(int pid)
         // Wake process from sleep().
         p->state = RUNNABLE;
       }
+    //ADDED TASK1 ASS2
+    if (p->proc_channel > -1) {
+      printf("Calling Destroy from kill in the kernel\n");
+      channel_destroy(p->proc_channel, CALLED_FROM_KERNEL);
+    }
+    //ADDED TASK1 ASS2
+
       release(&p->lock);
       return 0;
     }
@@ -618,6 +662,7 @@ killed(struct proc *p)
   
   acquire(&p->lock);
   k = p->killed;
+ 
   release(&p->lock);
   return k;
 }
@@ -681,3 +726,48 @@ procdump(void)
     printf("\n");
   }
 }
+
+//ADDED ASS2 TASK1
+struct channel* getChannelArray(void) {
+  return channels;
+}
+
+int channel_destroy(int cd, int call_type) {
+  
+    if (cd < 0 || cd >= CHANNELS_NUM) {
+    printf("Channel Descriptor is out of bounds!");
+    return -1;
+    }
+    struct channel desired_chan= getChannelArray()[cd];
+
+    
+    acquire(&desired_chan.chan_lock);
+    printf("(sys_destroy_chan) Acquired chan lock in named: %s\n",desired_chan.chan_lock.name);
+    if (desired_chan.chan_state == UNUSED_CHAN) {
+      release(&desired_chan.chan_lock);
+      return -1;
+    }
+    desired_chan.chan_state=UNUSED_CHAN;
+    desired_chan.cd= -1;
+
+    //zero out the channel data in the proc that opened the channel, to prevent redundant calls to chan_destroy from kernel
+    struct proc * parent_proc= desired_chan.parent_proc;
+    if (myproc() == parent_proc && call_type == CALLED_FROM_KERNEL) { //if the running process is calling from kernel, to avoid deadlocking, don't acquire the lock 
+      parent_proc->proc_channel=-1;
+    }
+    else { //the parent process of the channel is either calling from user space, so it doesen't hold it's process lock. Same goes for the rest of the procs calling destroy.
+      acquire(&parent_proc->lock);
+      printf("(sys_destroy_chan) Acquired chan lock in named: %s\n",desired_chan.chan_lock.name);
+      parent_proc->proc_channel=-1;
+      release(&parent_proc->lock);
+    }
+    
+    //wake both of the channels waiting to use this channel
+    wakeup(&desired_chan.read_chan);
+    wakeup(&desired_chan.write_chan);
+
+    release(&desired_chan.chan_lock);
+    return 0;
+}
+
+//ADDED ASS2 TASK1

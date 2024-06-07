@@ -6,6 +6,103 @@
 #include "spinlock.h"
 #include "proc.h"
 
+//ADDED TASK1 ASS2
+uint64 sys_create_channel(void) {
+  int chan_idx=0;
+  struct proc * p= myproc();
+  for (struct channel* curr_chan= getChannelArray(); chan_idx < CHANNELS_NUM; curr_chan++) {
+    acquire(&curr_chan->chan_lock);
+    printf("(sys_create_chan) Acquired chan lock in named: %s\n",curr_chan->chan_lock.name);
+    if (curr_chan->chan_state == UNUSED_CHAN) {
+      curr_chan->parent_proc=p; //to be used in destroy
+      acquire(&p->lock);
+      printf("(sys_create_chan) Acquired chan lock in named: %s\n",p->lock.name);
+      p->proc_channel=chan_idx; //FOR LATER USE TO DESTROY THIS CREATED CHANNEL IN EXIT AND WHEN THIS PROC IS KILLED
+      release(&p->lock);
+      release(&curr_chan->chan_lock); // relrease chan lock here to prevent acquire panic/deadlock
+      return chan_idx;
+    }
+    release(&curr_chan->chan_lock);
+    chan_idx++;
+  }
+
+  //no channel is available..
+  return -1;
+}
+
+uint64 sys_channel_put(void) {
+  int cd;
+  argint(0,&cd);
+  int data_to_put;
+  argint(0,&data_to_put);
+  if (cd < 0 || cd > CHANNELS_NUM) {
+    printf("Channel Descriptor is out of bounds!");
+    return -1;
+  }
+
+  struct channel desired_chan= getChannelArray()[cd]; 
+  acquire(&desired_chan.chan_lock);
+   printf("(sys_put_chan) Acquired chan lock in named: %s\n",desired_chan.chan_lock.name);
+  while (desired_chan.write_chan >= 0) {
+    sleep(&desired_chan.write_chan, &desired_chan.chan_lock);
+    if (desired_chan.chan_state == UNUSED_CHAN) {
+      release(&desired_chan.chan_lock);
+      printf("Chan was destroyed before i woke up! exiting");
+      return -1;
+    }
+  }
+
+  desired_chan.data=data_to_put;
+  desired_chan.read_chan=0;
+  desired_chan.write_chan=1;
+  wakeup(&desired_chan.read_chan);
+
+  release(&desired_chan.chan_lock);
+
+  return 0;
+}
+
+uint64 sys_channel_take(void) { 
+    int cd;
+    argint(0, &cd);
+    uint64 data_addr;
+    argaddr(1, &data_addr);
+
+    if (cd < 0 || cd >= CHANNELS_NUM) {
+    printf("Channel Descriptor is out of bounds!");
+    return -1;
+    }
+
+    
+  struct channel desired_chan= getChannelArray()[cd]; 
+  acquire(&desired_chan.chan_lock);
+   printf("(sys_take_chan) Acquired chan lock in named: %s\n",desired_chan.chan_lock.name);
+  while (desired_chan.read_chan > 0) {
+    sleep(&desired_chan.read_chan, &desired_chan.chan_lock);
+    if (desired_chan.chan_state == UNUSED_CHAN) {
+      release(&desired_chan.chan_lock);
+      printf("Chan was destroyed before i woke up! exiting");
+      return -1;
+    }
+  }
+
+  copyout(myproc()->pagetable, data_addr, (char *)&desired_chan.data, 4); //? how many bytes to copy??
+  wakeup(&desired_chan.write_chan);
+
+  release(&desired_chan.chan_lock);
+
+  return 0;
+}
+
+uint64 sys_channel_destroy(void) { //turn the channel to UNUSED state, wake the sleepers on BOTH channels
+    int cd;
+    argint(0, &cd);
+    return channel_destroy(cd, CALLED_FROM_USER);
+}
+
+//ADDED TASK1 ASS2
+
+
 uint64
 sys_exit(void)
 {

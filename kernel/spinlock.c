@@ -38,6 +38,11 @@ acquire(struct spinlock *lk)
   // On RISC-V, this emits a fence instruction.
   __sync_synchronize();
 
+  //ADDED -DEBUG FOR TASK1 ASS2
+  //printf("in acquire: acquired lock named - %s",lk->name);
+  //ADDED -DEBUG FOR TASK1 ASS2
+
+
   // Record info about lock acquisition for holding() and debugging.
   lk->cpu = mycpu();
 }

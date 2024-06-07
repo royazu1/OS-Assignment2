@@ -106,6 +106,10 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+//ADDED ASS2 TASK1
+struct channel* getChannelArray(void);
+int channel_destroy(int cd, int call_type); //inner function to be used inside a kernel. will be called by sys_destroy_channel as well
+//ADDED ASS2 TASK1
 
 // swtch.S
 void            swtch(struct context*, struct context*);

@@ -1,3 +1,8 @@
+//ADDED TASK1
+#define CHANNELS_NUM 16
+//ADDED TASK1
+
+
 // Saved registers for kernel context switches.
 struct context {
   uint64 ra;
@@ -104,4 +109,34 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  //ADDED ASS2-TASK1
+  int proc_channel;
+  //ADDED ASS2-TASK1
 };
+
+//ADDED ASS2-TASK1
+
+enum chanstate {
+  USED_CHAN=0,
+  UNUSED_CHAN=1
+};
+
+enum channel_destroy_call_types {
+  CALLED_FROM_USER=0,
+  CALLED_FROM_KERNEL=1
+};
+
+
+struct channel
+{
+  struct spinlock chan_lock;
+  int data; //pointer to the hold the desired data to consume
+  int cd; //channel descriptor will be initialized with -1 o.e a negative value which can be queried in read/write attempts to check after being woken up from sleep
+  int read_chan; //channel that read attempts wait on in wait(chan*)
+  int write_chan; //channel that write attempts wait on in wait(chan*)
+  int chan_state;
+  struct proc * parent_proc;
+
+};
+//ADDED ASS2-TASK1
