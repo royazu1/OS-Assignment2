@@ -155,6 +155,9 @@ main(void)
       break;
     }
   }
+  // ASS2 TASK1 - REMOVE LATER
+  printf("Shell pid is:%d\n", getpid());
+  // ASS2 TASK1 - REMOVE LATER
 
   // Read and run input commands.
   while(getcmd(buf, sizeof(buf)) >= 0){

@@ -76,7 +76,7 @@ procinit(void)
       curr_chan->cd=i;
       curr_chan->data=0;
       curr_chan->read_chan=0;
-      curr_chan->write_chan=0;
+      curr_chan->write_chan=1;
       curr_chan->parent_proc=0; //null_ptr
       i++;
       
@@ -738,35 +738,35 @@ int channel_destroy(int cd, int call_type) {
     printf("Channel Descriptor is out of bounds!");
     return -1;
     }
-    struct channel desired_chan= getChannelArray()[cd];
-
+    struct channel * desired_chan= getChannelArray()+cd;
     
-    acquire(&desired_chan.chan_lock);
-    printf("(sys_destroy_chan) Acquired chan lock in named: %s\n",desired_chan.chan_lock.name);
-    if (desired_chan.chan_state == UNUSED_CHAN) {
-      release(&desired_chan.chan_lock);
+    
+    acquire(&desired_chan->chan_lock);
+    printf("(sys_destroy_chan) Acquired chan lock in named: %s\n",desired_chan->chan_lock.name);
+    if (desired_chan->chan_state == UNUSED_CHAN) {
+      release(&desired_chan->chan_lock);
       return -1;
     }
-    desired_chan.chan_state=UNUSED_CHAN;
-    desired_chan.cd= -1;
+    desired_chan->chan_state=UNUSED_CHAN;
+    desired_chan->cd= -1;
 
     //zero out the channel data in the proc that opened the channel, to prevent redundant calls to chan_destroy from kernel
-    struct proc * parent_proc= desired_chan.parent_proc;
+    struct proc * parent_proc= desired_chan->parent_proc;
     if (myproc() == parent_proc && call_type == CALLED_FROM_KERNEL) { //if the running process is calling from kernel, to avoid deadlocking, don't acquire the lock 
       parent_proc->proc_channel=-1;
     }
     else { //the parent process of the channel is either calling from user space, so it doesen't hold it's process lock. Same goes for the rest of the procs calling destroy.
       acquire(&parent_proc->lock);
-      printf("(sys_destroy_chan) Acquired chan lock in named: %s\n",desired_chan.chan_lock.name);
+      printf("(sys_destroy_chan) Acquired chan lock in named: %s\n",desired_chan->chan_lock.name);
       parent_proc->proc_channel=-1;
       release(&parent_proc->lock);
     }
     
     //wake both of the channels waiting to use this channel
-    wakeup(&desired_chan.read_chan);
-    wakeup(&desired_chan.write_chan);
+    wakeup(&desired_chan->read_chan);
+    wakeup(&desired_chan->write_chan);
 
-    release(&desired_chan.chan_lock);
+    release(&desired_chan->chan_lock);
     return 0;
 }
 
