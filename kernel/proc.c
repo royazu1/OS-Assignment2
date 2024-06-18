@@ -739,7 +739,7 @@ int channel_destroy(int cd, int call_type) {
     
     
     acquire(&desired_chan->chan_lock);
-    printf("(sys_destroy_chan) Acquired chan lock in named: %s\n",desired_chan->chan_lock.name);
+    //printf("(sys_destroy_chan) Acquired chan lock in named: %s\n",desired_chan->chan_lock.name);
     if (desired_chan->chan_state == UNUSED_CHAN) {
       release(&desired_chan->chan_lock);
       return -1;
@@ -747,9 +747,9 @@ int channel_destroy(int cd, int call_type) {
     desired_chan->chan_state=UNUSED_CHAN;
     desired_chan->cd= -1;
 
-    //zero out the channel data in the proc that opened the channel, to prevent redundant calls to chan_destroy from kernel
+    //zero out the channel data in the proc that opened the channel, to prevent redundant calls to chan_destroy from kernel, after channel is later reused
     struct proc * parent_proc= desired_chan->parent_proc;
-    if (myproc() == parent_proc && call_type == CALLED_FROM_KERNEL) { //if the running process is calling from kernel, to avoid deadlocking, don't acquire the lock 
+    if (myproc() == parent_proc && call_type == CALLED_FROM_KERNEL) { //if the running process is calling from kernel, to avoid deadlocking, don't acquire the lock (in exit when called - it already holds the p->lock!)
       parent_proc->proc_channel=-1;
     }
     else { //the parent process of the channel is either calling from user space, so it doesen't hold it's process lock. Same goes for the rest of the procs calling destroy.
