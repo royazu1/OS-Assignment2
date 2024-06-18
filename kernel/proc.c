@@ -76,7 +76,7 @@ procinit(void)
       curr_chan->cd=i;
       curr_chan->data=0;
       curr_chan->read_chan=0;
-      curr_chan->write_chan=1;
+      curr_chan->write_chan=1; // 1 means ALLOWED, 0 MEANS DISALLOWED!
       curr_chan->parent_proc=0; //null_ptr
       i++;
       
@@ -633,10 +633,7 @@ kill(int pid)
         p->state = RUNNABLE;
       }
     //ADDED TASK1 ASS2
-    if (p->proc_channel > -1) {
-      printf("Calling Destroy from kill in the kernel\n");
-      channel_destroy(p->proc_channel, CALLED_FROM_KERNEL);
-    }
+  
     //ADDED TASK1 ASS2
 
       release(&p->lock);

@@ -12,15 +12,21 @@ uint64 sys_create_channel(void) {
   struct proc * p= myproc();
   for (struct channel* curr_chan= getChannelArray(); chan_idx < CHANNELS_NUM; curr_chan++) {
     acquire(&curr_chan->chan_lock);
-    printf("(sys_create_chan) Acquired chan lock in named: %s\n",curr_chan->chan_lock.name);
+    //printf("(sys_create_chan) Acquired chan lock in named: %s\n",curr_chan->chan_lock.name);
     if (curr_chan->chan_state == UNUSED_CHAN) {
       curr_chan->chan_state=USED_CHAN;
       curr_chan->parent_proc=p; //to be used in destroy
+      curr_chan->read_chan=0;
+      curr_chan->write_chan=1;
+      printf("WTF\n");
       acquire(&p->lock);
-      printf("(sys_create_chan) Acquired chan lock in named: %s\n",p->lock.name);
+      printf("(sys_create_chan) Acquired proc lock in named: %s\n",p->lock.name);
       p->proc_channel=chan_idx; //FOR LATER USE TO DESTROY THIS CREATED CHANNEL IN EXIT AND WHEN THIS PROC IS KILLED
+      printf("(sys_create_chan)- pid=%d\n",p->pid);
       release(&p->lock);
+      printf("(sys_create_chan) Released lock in named: %s\n",p->lock.name);
       release(&curr_chan->chan_lock); // relrease chan lock here to prevent acquire panic/deadlock
+      printf("(sys_create_chan) Released proc lock in named: %s\n",curr_chan->chan_lock.name);
       return chan_idx;
     }
     release(&curr_chan->chan_lock);
@@ -40,16 +46,18 @@ uint64 sys_channel_put(void) {
     printf("Channel Descriptor is out of bounds!");
     return -1;
   }
-  
+  printf("(sys_chan_put) cd=%d\n",cd);
   struct channel * desired_chan= getChannelArray()+cd; 
   acquire(&desired_chan->chan_lock);
+  printf("(sys_chan_put) Acquired chan lock in named: %s\n",desired_chan->chan_lock.name);
   if (desired_chan->chan_state == UNUSED_CHAN) {
     release(&desired_chan->chan_lock);
+    printf("(sys_chan_put) Released chan lock in named: %s\n",desired_chan->chan_lock.name);
     return -1;
   }
    //printf("(sys_put_chan) Acquired chan lock in named: %s\n",desired_chan->chan_lock.name);
   while (desired_chan->write_chan == 0) {
-    //printf("put- going to sleep, put=%d\n",data_to_put);
+    printf("put- going to sleep, put=%d\n",data_to_put);
     sleep(&(desired_chan->write_chan), &desired_chan->chan_lock);
     if (desired_chan->chan_state == UNUSED_CHAN) {
       release(&desired_chan->chan_lock);
@@ -57,13 +65,14 @@ uint64 sys_channel_put(void) {
       return -1;
     }
   }
-
+  printf("Put the data %d!!\n",data_to_put);
   desired_chan->data=data_to_put;
   desired_chan->read_chan=1;
   desired_chan->write_chan=0;
   wakeup(&desired_chan->read_chan);
 
   release(&desired_chan->chan_lock);
+  printf("(sys_chan_put) Acquired chan lock in named: %s\n",desired_chan->chan_lock.name);
   //printf("Put %d\n",data_to_put);
   return 0;
 }
@@ -79,19 +88,22 @@ uint64 sys_channel_take(void) {
     return -1;
     }
 
-    
+  printf("(sys_chan_take) cd=%d\n",cd);  
   struct channel * desired_chan= getChannelArray()+cd; 
   acquire(&desired_chan->chan_lock);
+  printf("(sys_chan_take) Acquired chan lock in named: %s\n",desired_chan->chan_lock.name);
   if (desired_chan->chan_state == UNUSED_CHAN) {
     release(&desired_chan->chan_lock);
+    printf("(sys_chan_take) Released chan lock in named: %s\n",desired_chan->chan_lock.name);
     return -1;
   }
    //printf("(sys_take_chan) Acquired chan lock in named: %s\n",desired_chan->chan_lock.name);
   while (desired_chan->read_chan == 0) {
-    //printf("Take - going to sleep %p\n",&(desired_chan->read_chan));
+    printf("Take - going to sleep %p\n",&(desired_chan->read_chan));
     sleep(&(desired_chan->read_chan), &desired_chan->chan_lock);
     if (desired_chan->chan_state == UNUSED_CHAN) {
       release(&desired_chan->chan_lock);
+      printf("(sys_chan_take) Released chan lock in named: %s\n",desired_chan->chan_lock.name);
       printf("TAKE Chan was destroyed before i woke up! exiting\n");
       return -1;
     }
@@ -103,6 +115,7 @@ uint64 sys_channel_take(void) {
   wakeup(&desired_chan->write_chan);
   //printf("Taken %d\n",desired_chan->data);
   release(&desired_chan->chan_lock);
+  printf("(sys_chan_take) Released chan lock in named: %s\n",desired_chan->chan_lock.name);
   
   return 0;
 }
